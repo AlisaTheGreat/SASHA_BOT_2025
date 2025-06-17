@@ -1,16 +1,16 @@
-import os # проверка наличия файла состояния (os.path.isfile)
-import json #сохранение/загрузка состояния (state) в файл.
+import os # проверка файла состояния
+import json #сохранение и загрузка состояния в файл.
 import time # для отслеживания времени действий, возраста, проверок нужд.
 from datetime import datetime, timedelta
 
-from telegram import Update # объект входящего сообщения.
-from telegram.ext import ApplicationBuilder, CommandHandler, CallbackContext #инициализация и запуск бота, для обработки команд типа /talk, /feed.
+from telegram import Update # сообщение тг
+from telegram.ext import ApplicationBuilder, CommandHandler, CallbackContext # запуск бота, для обработки команд типо /talk, /feed.
 from telegram.ext import CommandHandler
 from telegram.helpers import escape_markdown
 
 import httpx # отправка запросов
 from difflib import get_close_matches # для поиска похожих фраз в памяти Саши (fuzzy match).
-import pymorphy2 #лемматизация: приведение слов к начальной форме (для памяти).
+import pymorphy2 # приведение слов к начальной форме, чтобы искать проще
 
 
 # Глобальные переменные и тд
