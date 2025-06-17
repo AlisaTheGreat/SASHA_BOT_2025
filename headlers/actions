@@ -1,0 +1,53 @@
+async def action(update: Update, context: CallbackContext, action_name: str):
+    user = update.effective_user
+    user_id = str(user.id)
+
+    # Найдём или создадим профиль пользователя
+    user_profile = users.get(user_id)
+    if not user_profile:
+        role = state["roles"].get(user_id)
+        user_profile = UserProfile(user_id, role=role)
+        users[user_id] = user_profile
+
+    # Глаголы в м.р. и ж.р. для каждого действия, чтобы не путался бот
+    verbs = {
+        "feed": ("покормил", "покормила"),
+        "hug": ("обнял", "обняла"),
+        "play": ("позвал играть", "позвала играть"),
+        "praise": ("похвалил", "похвалила"),
+        "sleep": ("уложил спать", "уложила спать")
+    }
+
+    if action_name not in verbs:
+        await update.message.reply_text("Это действие пока не поддерживается.")
+        return
+
+    verb_m, verb_f = verbs[action_name]
+
+    # Персонализированное начало
+    action_intro = user_profile.action_phrase(verb_m, verb_f)
+    prompt = f"{action_intro} Саша, говорит в ответ:"
+
+    # Получаем ответ от модели
+    reply = await generate(user_profile, prompt)
+
+    await update.message.reply_text(reply)
+
+    # Обновим время действия
+    state["last_actions"][action_name] = datetime.now()
+    savee_state()
+
+async def feed_command(update: Update, context: CallbackContext):
+    await action(update, context, "feed")
+
+async def hug_command(update: Update, context: CallbackContext):
+    await action(update, context, "hug")
+
+async def play_command(update: Update, context: CallbackContext):
+    await action(update, context, "play")
+
+async def praise_command(update: Update, context: CallbackContext):
+    await action(update, context, "praise")
+
+async def sleep_command(update: Update, context: CallbackContext):
+    await action(update, context, "sleep")
