@@ -1,14 +1,17 @@
-import os
-import json
-import time
+import os # проверка наличия файла состояния (os.path.isfile)
+import json #сохранение/загрузка состояния (state) в файл.
+import time # для отслеживания времени действий, возраста, проверок нужд.
 from datetime import datetime, timedelta
-from telegram import Update
-from telegram.ext import ApplicationBuilder, CommandHandler, CallbackContext
-import httpx
+
+from telegram import Update # объект входящего сообщения.
+from telegram.ext import ApplicationBuilder, CommandHandler, CallbackContext #инициализация и запуск бота, для обработки команд типа /talk, /feed.
 from telegram.ext import CommandHandler
-from difflib import get_close_matches
-import pymorphy2
 from telegram.helpers import escape_markdown
+
+import httpx # отправка запросов
+from difflib import get_close_matches # для поиска похожих фраз в памяти Саши (fuzzy match).
+import pymorphy2 #лемматизация: приведение слов к начальной форме (для памяти).
+
 
 # Глобальные переменные и тд
 
@@ -41,7 +44,7 @@ def loade_state():
             with open(STATE_file, 'r', encoding='utf-8') as f:
                 state = json.load(f)
 
-            # Конвертировать строковые метки времени обратно в datetime
+            # Конвертирую строковые метки времени обратно в календаль
             if state.get("last_actions"):
                 for need, t in state["last_actions"].items():
                     if isinstance(t, str):
@@ -93,7 +96,7 @@ def savee_state():
     # Конвертирую время в строку
     if state_to_save.get("last_actions"):
         for need, t in state_to_save["last_actions"].items():
-            if isinstance(t, datetime):
+            if isinstance(t, datetime): # смотрим это дейттайм ваще или нет в ластакшон
                 state_to_save["last_actions"][need] = t.isoformat()
 
     # Сохраняю память пользователей
@@ -136,7 +139,7 @@ class UserProfile:
             return "С тобой сейчас кто-то говорит, но ты пока не очень его знаешь."
 
     def display_name(self):
-        return self.role.capitalize() if self.role else "Незнакомец"
+        return self.role.capitalize() if self.role else "Незнакомец" #приводим к норм виду блин
 
     def add_message(self, message):
         self.history.append(message)
@@ -145,7 +148,7 @@ class UserProfile:
     def __str__(self):
         return f"UserProfile({self.user_id}, роль: {self.role}, история: {len(self.history)} сообщений)"
 
-    #добавление из команд
+    # добавление из команд
     def add_to_history(self, message):
         self.history.append(message)
         if len(self.history) > 7:
@@ -165,30 +168,30 @@ class UserProfile:
 
 
 async def iam_command(update: Update, context: CallbackContext):
-    user = update.effective_user
+    user = update.effective_user # тг бот вернёт нам юзера отправившего комманду
     user_id = str(user.id)
-    args = context.args
+    args = context.args # тг бот нам вернёт массив со словами пользователя
 
     if not args:
         await update.message.reply_text("Напиши кто ты. Пример: /iam мама")
         return
 
-    role = " ".join(args).strip().lower()
+    role = " ".join(args).strip().lower() # получаем роль в нижнем регистре и в строку всё
 
-    # если пользователь ещё не в словаре, создаём профиль
+    # если пользователя ещё нет в файле, создаю его профиль
     if user_id not in users:
         users[user_id] = UserProfile(user_id)
 
     users[user_id].role = role
     savee_state()
 
-    await update.message.reply_text(f"Запомнил! Ты теперь - {role}.")
+    await update.message.reply_text(f"Запомнил! Ты теперь - {role}.") # шаблон тг ответа я взяла из библиотеки тг
 
 
 async def talk_command(update: Update, context: CallbackContext):
     user = update.effective_user
     user_id = str(user.id)
-    message_text = update.message.text.partition(" ")[2].strip()
+    message_text = update.message.text[len("/talk "):].strip()
 
     # Получает или создаёт профиль пользователя
     user_profile = users.get(user_id)
@@ -197,13 +200,13 @@ async def talk_command(update: Update, context: CallbackContext):
         user_profile = UserProfile(user_id, role=role)
         users[user_id] = user_profile
 
-    # Описание пользователя в начало истории, чтобы Саша понял, о чём речь
+    # Описание пользователя в начало истории, чтобы Саша понял
     if len(user_profile.history) == 0:
         user_profile.add_to_history(user_profile.prompt_frag())
 
-    # Добавим в историю сообщение пользователя
+    # Добавляет в историю сообщение пользователя
     if message_text:
-        user_profile.add_to_history(f"{user_profile.display_name()}: {message_text}")
+        user_profile.add_to_history(f"{user_profile.display_name()}: {message_text}") #имя показывает и текст
     else:
         user_profile.add_to_history(f"{user_profile.display_name()} молчит.")
 
@@ -317,12 +320,12 @@ class MemoryManager:
                 best_entry = entry
 
         if best_score >= 0.3 and best_entry:
-            return best_entry.as_prompt()
-        return ""
+            return best_entry
+        return None
 
 memory_manager = MemoryManager()
 
-# При загрузке состояния добавь все записи
+# При загрузке состояния загружаю все записи
 for norm_key, entry in state["memory_dict"].items():
     memory_manager.add(entry["original_key"], entry["text"], entry["from"])
 
@@ -422,7 +425,8 @@ async def generate(user_profile: UserProfile, prompt_text: str) -> str:
     fact = memory_manager.find_best_fact(prompt_text)
 
     if fact:
-        prompt_history += f"\nСаша это помнит:\n{fact}"
+        print(f"Использовано знание: '{fact.key}' от {fact.author}")
+        prompt_history += f"\nСаша это помнит:\n{fact.as_prompt()}"
 
 
 
@@ -471,8 +475,9 @@ async def generate(user_profile: UserProfile, prompt_text: str) -> str:
         return "У Саши что-то сломалось :("
 
 
+# старт - база
+
 async def start_command(update: Update, context: CallbackContext):
-    """Обработчик команды /start – приветствие, вывод возраста и списка команд."""
     chat_id = update.effective_chat.id
     if state["chat_id"] is None:
         state["chat_id"] = chat_id
@@ -495,7 +500,7 @@ async def start_command(update: Update, context: CallbackContext):
         "/iam – Представиться ребёнку"
 
     )
-    welcome_text = f"Привет! Меня зовут Саша. Мой возраст 6 лет.\n" \
+    welcome_text = f"Привет! Меня зовут Саша. Мой возраст 6 лет. Я ещё маленький, я люблю играть :)\n" \
                    f"Доступные команды:\n{commands_info}"
     await update.message.reply_text(welcome_text)
     savee_state()
@@ -539,6 +544,14 @@ async def check_needs(application):
         "hug": 6     # если не обнимали больше 6 часов
     }
 
+    user_id = "system"
+    role = "система"
+    user_profile = users.get(user_id)
+
+    if not user_profile:
+        user_profile = UserProfile(user_id, role)
+        users[user_id] = user_profile
+
     for need, threshold in critical_needs.items():
         last_time = state["last_actions"].get(need)
         if not last_time:
@@ -560,7 +573,7 @@ async def check_needs(application):
             prompt += " его давно не обнимали"
         prompt += ". Что он скажет?"
 
-        reply = await generate(prompt, )
+        reply = await generate(user_profile, prompt)
         await application.bot.send_message(chat_id=state["chat_id"], text=reply)
 
 
